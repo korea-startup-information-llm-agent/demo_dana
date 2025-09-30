@@ -1,0 +1,27 @@
+# Python 캐시 파일
+__pycache__/
+*.pyc
+
+# 가상환경
+venv/
+env/
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# 로그 파일
+*.log
+
+# IP 데이터셋 내 JSON/JSONL 제외
+/unzip_data/ip/dataset/**/*.json
+/unzip_data/ip/dataset/**/*.jsonl
+
+# 특허 데이터셋 내 JSON/JSONL 제외
+/unzip_data/patent/dataset/**/*.json
+/unzip_data/patent/dataset/**/*.jsonl
+
+
+
+# 다른 중간 산출물
+*.zip
