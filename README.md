@@ -1,159 +1,153 @@
-# Data Processing for Patent & Legal Dataset
 
-이 문서는 현재 진행된 법률/특허 데이터셋 처리 과정과 폴더 구조, 사용 방법을 정리한 문서입니다. 
+# IP Legal → SFT Routing Dataset
 
-<br><br>
+법률(지식재산권) 데이터셋을 **LLM 라우팅(SFT)** 용 JSONL로 변환하는 프로젝트입니다.
+목표는 **지식 주입 X**, **행동 정책(의도/툴선택/관할/JSON 형식)** 학습입니다.
 
-## 진행 사항 및 최종 목적
+* 모델(예정): Llama 3.2 **3B Instruct** (QLoRA SFT, 온디바이스: `llama.cpp + GGUF`)
+* 액션 스키마:
 
-현재까지 작업한 내용:
+  * `intent`: `patent_info | process | brainstorm | other`
+  * `action`: `retrieve | summarize | finalize | (선택) web_search`
+  * `jurisdiction`: `KR | US | WIPO | unknown`
+  * `confidence`: `0.0–1.0`
+* 출력 포맷(라인 단위 JSONL):
 
-1. **법률 데이터셋 (ip_legal_data)**
+  ```json
+  {
+    "messages": [
+      {"role":"system","content":"...JSON only & routing rules..."},
+      {"role":"user","content":"<사용자 질문>"}
+    ],
+    "response":"{\"intent\":\"...\",\"action\":\"...\",\"jurisdiction\":\"...\",\"confidence\":0.73}"
+  }
+  ```
 
-   - labeled zip 파일 압축 해제
-   - 폴더 구조를 분석용으로 정리 (예: `judgment/qa/train/`, `judgment/summary/`)
-   - 원본 raw 데이터는 제외
+---
 
-2. **특허 데이터셋 (patent_data)**
-   - labeled zip 파일 압축 해제
-   - 각 폴더 내 JSON 파일을 JSONL로 합치고 기존 JSON 삭제
-   - raw 및 `Other` 폴더는 제외
+## 현재 상태
 
-<br>
+* 공유 드라이브에 제공된 **법률 데이터셋 zip** 파일을 루트에 두고, `unzip.py` 실행으로 압축 해제함
+* 특허 데이터는 이번 리비전에서 **비사용/보류**
+* 변환 결과:
 
-> 이 단계까지는 단순히 데이터 분석 및 테스트 용이성을 위해 **폴더 구조와 파일 형식만 정리한 상태**입니다.
+  ```
+  TRAIN  QA_written: 76160, SUM_top20_written: 880, SUM_leftover_written: 3520
+  VAL    QA_written: 9520,  SUM_all_written : 550
+  ```
+* 산출물:
 
-<br>
+  ```
+  C:\dana\demo_dana\data\sft\train.jsonl
+  C:\dana\demo_dana\data\sft\val.jsonl
+  C:\dana\demo_dana\data\sft\summary_leftover.jsonl
+  ```
+* (선택) `web_search` 합성 샘플 추가 가능 → `train_mixed.jsonl` 생성
 
-### 최종 목표
-
-1. **법률 데이터 (지식재산권법)**
-
-   - LLM 파인튜닝용 소스 데이터로 가공
-   - 데이터 전처리 및 정형화 후, 학습에 활용할 수 있는 형태로 준비
-   - 실제 모델 학습은 이 폴더 외 다른 환경에서 수행
-
-2. **특허 데이터**
-   - JSONL 데이터 기반으로 벡터 DB 저장용 스키마 설계
-   - 내부 검색용 데이터로 구축 및 관리
-   - 분석, 검색, 추천 시스템 등에서 활용 가능
-   - 실제 DB 구축과 운영은 이 폴더 외 다른 단계에서 진행
-
-<br>
-
-> 현재 폴더와 파일 정리는 **데이터 전처리와 구조 정리 단계**이며, 실제 ML 학습이나 DB 운영은 별도의 환경에서 이어서 수행됩니다.
-
-<br><br>
+---
 
 ## 폴더 구조
 
-```bash
-data-prop/
-│
-├─ ip_legal_data/  # 법률 데이터 원본 (raw/labeled)
-├─ patent_data/    # 특허 데이터 원본 (labeled only, raw는 사용하지 않음)
-│
-└─ unzip_data/
-    ├─ ip/
-    │   ├─ dataset/       # 압축 해제된 법률 데이터셋 저장
-    │   │   ├─ judgment/
-    │   │   │   ├─ qa/
-    │   │   │   │   ├─ train/
-    │   │   │   │   └─ val/
-    │   │   │   └─ summary/
-    │   │   └─ ...        # 다른 법률 종류별로 동일 구조
-    │   └─ unzip.py       # 법률 데이터셋 압축 해제 코드
-    │
-    └─ patent/
-        ├─ dataset/
-        │   ├─ train/
-        │   │   ├─ <zip_name_folder>/ # 예: TL_C_ICT_SW_CC_빅데이터_인공지능_CCA_...
-        │   │   │   └─ TL_CCA.jsonl   # jsonl로 합친 데이터
-        │   │   └─ ...
-        │   └─ val/
-        │       ├─ <zip_name_folder>/
-        │       │   └─ VL_CCB.jsonl
-        │       └─ ...
-        │
-        ├─ unzip.py        # 특허 데이터셋 압축 해제 코드
-        └─ merge_jsonl.py  # 폴더 내 모든 json 파일을 jsonl로 합치고 기존 json 삭제
+```
+C:\dana\demo_dana
+├─ ip_legal_data.zip          # 공유 드라이브에서 복사해온 원본 zip
+├─ unzip_data\ip\dataset\     # unzip.py 실행 결과
+│  ├─ judgment\{qa,summary}\{train,val}\*.json
+│  ├─ statute\{qa,summary}\{train,val}\*.json
+│  ├─ trial_decision\...
+│  ├─ decision\...
+│  └─ interpretation\...
+├─ tools\
+│  ├─ unzip.py                # 법률 데이터셋 압축 해제
+│  ├─ make_jsonl.py           # 원본 → SFT JSONL 변환 (summary 상단 20%만 포함)
+│  └─ add_web_search.py       # (선택) web_search 합성 & 비율 믹싱
+└─ data\sft\
+   ├─ train.jsonl
+   ├─ val.jsonl
+   ├─ summary_leftover.jsonl
+   └─ (옵션) train_mixed.jsonl
 ```
 
-<br><br>
+---
 
-## 데이터 준비
+## 실행 순서
 
-- 구글 드라이브에서 제공되는 `dataset` 폴더에는 두 개의 데이터셋이 있습니다:
+### 1) 법률 데이터 압축 해제 (필수)
 
-  1. `ip_legal_data`
-  2. `patent_data`
+1. 공유 드라이브에서 `ip_legal_data.zip`을 받아서 프로젝트 루트(`C:\dana\demo_dana`)에 둡니다.
+2. 압축 해제 실행:
 
-- 이 두 폴더를 그대로 작업 폴더 최상단(`data-prop/`) 루트에 위치시키면 됩니다.
+   ```bat
+   cd C:\dana\demo_dana
+   python tools\unzip.py
+   ```
+3. 실행 후 `unzip_data/ip/dataset/` 폴더가 자동 생성되고, 판결문/심결문/법령 등 폴더 구조로 정리됩니다.
 
-- 각 데이터셋 안에는 **라벨링 데이터(labeled)**와 **원천 데이터(raw)**가 포함되어 있습니다.
-  - 실행 코드는 **raw 폴더와 patent_data/Other 폴더는 제외**하고 labeled 데이터만 처리합니다.
-  - 즉, zip 압축 해제 및 JSON → JSONL 변환 과정에서 **raw와 Other 폴더는 자동으로 무시**됩니다.
+---
 
-<br><br>
+### 2) 법률 데이터 → SFT JSONL 변환 (필수)
 
-## 작업 과정
+```bat
+cd C:\dana\demo_dana
+python tools\make_jsonl.py
+```
 
-### 1. 법률 데이터셋 압축 해제
+* QA는 전부 포함 (사용자 질문 → `action=retrieve` 중심)
+* Summary는 **상단 20%만** 포함 → `action=summarize` 신호 학습
+* 남은 Summary 80%는 `summary_leftover.jsonl`로 별도 저장
 
-- `unzip_data/ip/unzip.py` 실행
-- 각 zip 파일을 **종류(kind) + 형식(form) + split(train/val)** 기준으로 하위 폴더에 압축 해제
-- 한글명을 영어로 변환하여 폴더 관리
-  - 예: `판결문/질의응답` → `judgment/qa`
+---
 
-<br>
+### 3) (선택) 외부 검색 액션 추가(web_search)
 
-### 2. 특허 데이터셋 압축 해제
+```bat
+python tools\add_web_search.py
+```
 
-- `unzip_data/patent/unzip.py` 실행
-- labeled zip만 사용, raw zip은 무시
-- 각 zip 파일은 train/val 기준 폴더 아래 **zip 이름 그대로 폴더 생성 후 압축 해제**
-- 예:
-  ```bash
-  patent_data/train/labeled/TL_C_ICT_SW_CC_빅데이터_인공지능_CCA_...zip
-  → unzip_data/patent/dataset/train/TL_C_ICT_SW_CC_빅데이터_인공지능_CCA_.../
+* 결과물:
+
+  * `web_search_synth.jsonl` (합성 원본)
+  * `train_mixed.jsonl` (기존 + 합성 섞기, 기본: web_search 약 **15%** 비율)
+
+> 처음에는 `train.jsonl`만으로 학습하고, **외부검색 라우팅 필요** 시 `train_mixed.jsonl`을 사용하세요.
+
+---
+
+## 학습에 연결
+
+* (예) `configs/train.yaml`에서 경로 지정:
+
+  ```yaml
+  data:
+    train_path: C:\dana\demo_dana\data\sft\train.jsonl        # 또는 train_mixed.jsonl
+    val_path:   C:\dana\demo_dana\data\sft\val.jsonl
+  ```
+* 학습은 별도 프로젝트(예: `C:\patent-llama`)에서 수행.
+
+  ```bat
+  copy C:\dana\demo_dana\data\sft\*.jsonl  C:\patent-llama\data\sft\
   ```
 
-<br>
+---
 
-### 3. 특허 JSON 파일 합치기
+## .gitignore 권장
 
-- `unzip_data/patent/merge_jsonl.py` 실행
-- 각 zip 폴더 내 모든 `.json` 파일을 **한 줄 JSONL**로 합치고 기존 JSON 파일 삭제
-- JSONL 파일명: zip 폴더명에서 TL/VL + 마지막 코드 추출
-  - 예: `TL_C_ICT_SW_CC_...` → `TL_CCA.jsonl`
-  - 예: `VL_C_ICT_SW_CC_...` → `VL_CCB.jsonl`
-- 최종 폴더 구조:
-  ```bash
-  unzip_data/patent/dataset/train/TL_C_ICT_SW_CC_.../TL_CCA.jsonl
-  unzip_data/patent/dataset/val/VL_CCB/...
-  ```
+산출물은 커밋하지 않습니다.
 
-<br><br>
+```
+# SFT outputs
+/data/sft/*.jsonl
+!/data/sft/README.md
+```
 
-## 실행 순서 예시
+---
 
-1. raw 데이터를 `data-prop/` 루트에 위치
+## 다음 단계
 
-2. 법률 데이터 압축 해제
+1. `train_mixed.jsonl`로  QLoRA SFT
+2. LangGraph 라우터 연결:
 
-   ```bash
-   python unzip_data/ip/unzip.py
-   ```
-
-3. 특허 데이터 압축 해제
-
-   ```bash
-   python unzip_data/patent/unzip.py
-   ```
-
-4. 특허 데이터 JSON → JSONL 변환 및 기존 JSON 삭제
-   ```bash
-   python unzip_data/patent/merge_jsonl.py
-   ```
-
-<br>
+   * `retrieve` → 내부 RAG
+   * `summarize` → 요약기
+   * `web_search` → 외부 검색 툴
+   * `finalize`는 드물게 허용

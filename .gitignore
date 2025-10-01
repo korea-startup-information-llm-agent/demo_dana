@@ -21,7 +21,9 @@ Thumbs.db
 /unzip_data/patent/dataset/**/*.json
 /unzip_data/patent/dataset/**/*.jsonl
 
-
+# 
+/data/sft/*
 
 # 다른 중간 산출물
 *.zip
+
